@@ -1,0 +1,87 @@
+! =====================================================================
+! SW1-SEDE  (Cisco 2960)
+! VLANs 10/20/99, portas de acesso, trunk para o R1, SSH e port-security
+! Colar em: enable -> configure terminal
+! =====================================================================
+enable
+configure terminal
+hostname SW1-SEDE
+no ip domain-lookup
+enable secret Cisco123!
+service password-encryption
+banner motd # Acesso apenas a pessoal autorizado #
+
+! ---- VLANs ----
+vlan 10
+ name ADMIN
+vlan 20
+ name VENDAS
+vlan 99
+ name GESTAO
+vlan 999
+ name NAO-USADAS
+exit
+
+! ---- Trunk para o R1 ----
+interface GigabitEthernet0/1
+ description Trunk para R1-SEDE
+ switchport mode trunk
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,99
+ switchport nonegotiate
+exit
+
+! ---- Portas de acesso: ADMIN (Fa0/1-10) ----
+interface range FastEthernet0/1 - 10
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+exit
+
+! ---- Portas de acesso: VENDAS (Fa0/11-20) ----
+interface range FastEthernet0/11 - 20
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+exit
+
+! ---- Portas não usadas: desligadas e numa VLAN sem uso ----
+interface range FastEthernet0/21 - 24, GigabitEthernet0/2
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+
+! ---- Gestão do switch (VLAN 99) ----
+interface Vlan99
+ description Gestao do switch
+ ip address 192.168.99.2 255.255.255.0
+ no shutdown
+exit
+ip default-gateway 192.168.99.1
+
+! ---- SSH ----
+ip domain-name lab.local
+username admin privilege 15 secret Cisco123!
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+line vty 0 15
+ transport input ssh
+ login local
+exit
+line console 0
+ logging synchronous
+exit
+
+end
+write memory

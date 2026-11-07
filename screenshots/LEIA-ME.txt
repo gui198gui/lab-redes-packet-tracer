@@ -1,0 +1,2 @@
+Coloca aqui as capturas de ecrã do Packet Tracer.
+O README espera pelo menos: topologia.png

@@ -1,0 +1,65 @@
+! =====================================================================
+! SW2-FILIAL  (Cisco 2960)
+! VLAN 30, portas de acesso, ligação ao R2, SSH
+! Colar em: enable -> configure terminal
+! =====================================================================
+enable
+configure terminal
+hostname SW2-FILIAL
+no ip domain-lookup
+enable secret Cisco123!
+service password-encryption
+banner motd # Acesso apenas a pessoal autorizado #
+
+! ---- VLANs ----
+vlan 30
+ name FILIAL
+vlan 999
+ name NAO-USADAS
+exit
+
+! ---- Ligação ao R2 (porta de acesso, o R2 não usa subinterfaces) ----
+interface GigabitEthernet0/1
+ description Ligacao a R2-FILIAL
+ switchport mode access
+ switchport access vlan 30
+exit
+
+! ---- Portas de acesso: FILIAL (Fa0/1-20) ----
+interface range FastEthernet0/1 - 20
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+exit
+
+! ---- Portas não usadas ----
+interface range FastEthernet0/21 - 24, GigabitEthernet0/2
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+
+! ---- Gestão do switch (na VLAN 30) ----
+interface Vlan30
+ description Gestao do switch
+ ip address 192.168.30.2 255.255.255.0
+ no shutdown
+exit
+ip default-gateway 192.168.30.1
+
+! ---- SSH ----
+ip domain-name lab.local
+username admin privilege 15 secret Cisco123!
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+line vty 0 15
+ transport input ssh
+ login local
+exit
+line console 0
+ logging synchronous
+exit
+
+end
+write memory

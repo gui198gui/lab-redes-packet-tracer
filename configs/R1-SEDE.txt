@@ -1,0 +1,106 @@
+! =====================================================================
+! R1-SEDE  (Cisco 2911)
+! Router-on-a-stick (VLANs 10/20/99), DHCP, OSPF, ACL e SSH
+! Colar em: enable -> configure terminal
+! =====================================================================
+enable
+configure terminal
+hostname R1-SEDE
+no ip domain-lookup
+enable secret Cisco123!
+service password-encryption
+banner motd # Acesso apenas a pessoal autorizado #
+
+! ---- SSH ----
+ip domain-name lab.local
+username admin privilege 15 secret Cisco123!
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+line vty 0 4
+ transport input ssh
+ login local
+ exec-timeout 10 0
+exit
+line console 0
+ logging synchronous
+ exec-timeout 10 0
+exit
+
+! ---- Interface física para o SW1 (trunk 802.1Q) ----
+interface GigabitEthernet0/0
+ description Trunk para SW1-SEDE
+ no ip address
+ no shutdown
+exit
+
+interface GigabitEthernet0/0.10
+ description VLAN 10 - ADMIN
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+exit
+
+interface GigabitEthernet0/0.20
+ description VLAN 20 - VENDAS
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+exit
+
+interface GigabitEthernet0/0.99
+ description VLAN 99 - GESTAO (nativa)
+ encapsulation dot1Q 99 native
+ ip address 192.168.99.1 255.255.255.0
+exit
+
+! ---- Ligação para a filial ----
+interface GigabitEthernet0/1
+ description Ligacao WAN para R2-FILIAL
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+exit
+
+! ---- DHCP (os primeiros 10 endereços ficam reservados) ----
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.20.1 192.168.20.10
+
+ip dhcp pool VLAN10-ADMIN
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.10.10
+exit
+
+ip dhcp pool VLAN20-VENDAS
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1
+ dns-server 192.168.10.10
+exit
+
+! ---- OSPF ----
+router ospf 1
+ router-id 1.1.1.1
+ network 192.168.10.0 0.0.0.255 area 0
+ network 192.168.20.0 0.0.0.255 area 0
+ network 192.168.99.0 0.0.0.255 area 0
+ network 10.0.0.0 0.0.0.3 area 0
+ passive-interface GigabitEthernet0/0.10
+ passive-interface GigabitEthernet0/0.20
+ passive-interface GigabitEthernet0/0.99
+exit
+
+! ---- ACL: Vendas so pode aceder ao servidor web da rede Admin ----
+ip access-list extended VENDAS-IN
+ remark Vendas pode usar o servidor web/DNS
+ permit tcp 192.168.20.0 0.0.0.255 host 192.168.10.10 eq www
+ permit udp 192.168.20.0 0.0.0.255 host 192.168.10.10 eq domain
+ remark Vendas nao pode aceder ao resto da rede Admin nem a Gestao
+ deny ip 192.168.20.0 0.0.0.255 192.168.10.0 0.0.0.255
+ deny ip 192.168.20.0 0.0.0.255 192.168.99.0 0.0.0.255
+ remark Tudo o resto e permitido (ex: filial)
+ permit ip any any
+exit
+
+interface GigabitEthernet0/0.20
+ ip access-group VENDAS-IN in
+exit
+
+end
+write memory
